@@ -41,8 +41,17 @@ export function VolunteerRegisterPage() {
     return (
       <div className="centered-page">
         <div className="card auth-card">
+          <div className="brand-mark">
+            <div className="brand-seal" />
+            <div>
+              <div className="brand-title">Simhastha 360</div>
+              <div className="brand-subtitle">Ujjain 2028</div>
+            </div>
+          </div>
           <h1>Application received</h1>
-          <p>Status: <strong>Pending Review</strong></p>
+          <p>
+            Status: <strong>Pending Review</strong>
+          </p>
           <p className="muted">
             An admin will review your application. Once approved, sign in through the Simhastha 360 mobile app with your
             phone number to start receiving tasks.
@@ -55,8 +64,17 @@ export function VolunteerRegisterPage() {
   return (
     <div className="centered-page">
       <form className="card auth-card" onSubmit={handleSubmit}>
-        <h1>Volunteer Registration</h1>
-        <p className="muted">Simhastha 360 — help pilgrims, get matched to tasks that fit your skills.</p>
+        <div className="brand-mark">
+          <div className="brand-seal" />
+          <div>
+            <div className="brand-title">Simhastha 360</div>
+            <div className="brand-subtitle">Ujjain 2028</div>
+          </div>
+        </div>
+        <h1>Volunteer registration</h1>
+        <p className="muted" style={{ marginTop: -8 }}>
+          Help pilgrims, get matched to tasks that fit your skills.
+        </p>
 
         <label>
           Name

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client";
-import { CrowdBadge } from "../components/CrowdBadge";
 import type { PublicFamilyStatus } from "../api/types";
 
 export function PublicFamilyDashboardPage() {
@@ -18,29 +17,61 @@ export function PublicFamilyDashboardPage() {
 
   return (
     <div className="centered-page">
-      <div className="card auth-card">
-        <h1>Peace of Mind</h1>
-        {error && <p className="error-text">{error}</p>}
-        {!error && !status && <p>Loading...</p>}
-        {status && (
-          <>
-            {status.last_known_lat != null ? (
-              <p>
-                Last known location: <strong>{status.last_known_lat.toFixed(4)}, {status.last_known_lng!.toFixed(4)}</strong>
-                <br />
-                <span className="muted">Last shared {new Date(status.last_seen_at!).toLocaleString()}</span>
-              </p>
-            ) : (
-              <p className="muted">No location has been shared recently.</p>
-            )}
-            {status.zone_name && (
-              <p>
-                Area: <strong>{status.zone_name}</strong> — <CrowdBadge level={status.crowd_level!} />
-              </p>
-            )}
-          </>
-        )}
-        <p className="muted small">This page shows only what was voluntarily shared. No account or login is needed to view it.</p>
+      <div className="public-page-card">
+        <div className="public-hero">
+          <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--brass)", marginBottom: 8 }}>
+            Peace of mind
+          </div>
+          {error ? (
+            <div style={{ fontFamily: "Marcellus, serif", fontSize: 28 }}>Link unavailable</div>
+          ) : (
+            <div style={{ fontFamily: "Marcellus, serif", fontSize: 32 }}>Last known status</div>
+          )}
+          {status && (
+            <div style={{ fontSize: 14, color: "rgba(246,241,231,0.7)", marginTop: 8 }}>
+              {status.last_seen_at ? `Last shared ${new Date(status.last_seen_at).toLocaleString()}` : "No recent updates"} · no account needed to view
+            </div>
+          )}
+        </div>
+
+        <div className="public-page-body">
+          {error && <p className="error-text">{error}</p>}
+          {!error && !status && <p className="muted">Loading...</p>}
+
+          {status && (
+            <>
+              {status.zone_name ? (
+                <div className="info-row positive">
+                  <i className="ph-fill ph-check-circle" />
+                  <div>
+                    <div style={{ fontWeight: 500 }}>Near {status.zone_name}</div>
+                    <div className="muted small">Crowd level: {status.crowd_level}</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="info-row">
+                  <i className="ph ph-map-pin" />
+                  <div className="muted">No location has been shared recently.</div>
+                </div>
+              )}
+
+              <div className="info-row">
+                <i className="ph-fill ph-eye-slash" />
+                <div>
+                  <div style={{ fontWeight: 500 }}>What you cannot see</div>
+                  <div className="muted small">Exact coordinates, movement history, phone number, health card. This link can be revoked any time.</div>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            <button style={{ flex: 1 }}>Ujjain safety advisories</button>
+            <button className="secondary" style={{ flex: 1 }}>
+              Helpline 1800-360-360
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

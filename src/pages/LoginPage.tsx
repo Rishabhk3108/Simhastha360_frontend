@@ -27,8 +27,16 @@ export function LoginPage() {
   return (
     <div className="centered-page">
       <form className="card auth-card" onSubmit={handleSubmit}>
-        <h1>Simhastha 360</h1>
-        <p className="muted">Command Centre sign in</p>
+        <div className="brand-mark">
+          <div className="brand-seal" />
+          <div>
+            <div className="brand-title">Simhastha 360</div>
+            <div className="brand-subtitle">Ujjain 2028</div>
+          </div>
+        </div>
+        <p className="muted" style={{ marginTop: -8 }}>
+          Command Centre sign in
+        </p>
         <label>
           Phone
           <input value={phone} onChange={(e) => setPhone(e.target.value)} required />

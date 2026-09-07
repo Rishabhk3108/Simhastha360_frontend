@@ -7,6 +7,11 @@ type IncidentRow =
   | { kind: "sos"; id: number; time: string; text: string; status: string }
   | { kind: "lost_person"; id: number; time: string; text: string; status: string };
 
+const ICONS: Record<IncidentRow["kind"], string> = {
+  sos: "ph-fill ph-siren",
+  lost_person: "ph-fill ph-user-focus",
+};
+
 export function LiveMonitoringPage() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [alerts, setAlerts] = useState<PredictiveAlert[]>([]);
@@ -27,7 +32,7 @@ export function LiveMonitoringPage() {
       kind: "sos",
       id: s.id,
       time: s.created_at,
-      text: `SOS at (${s.lat.toFixed(4)}, ${s.lng.toFixed(4)})`,
+      text: `SOS at (${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}) — ${s.status}`,
       status: s.status,
     }));
     const lostRows: IncidentRow[] = lostRes.data.map((l) => ({
@@ -54,12 +59,70 @@ export function LiveMonitoringPage() {
 
   if (loading) return <p>Loading live monitoring...</p>;
 
+  const activeSos = incidents.filter((i) => i.kind === "sos" && i.status !== "resolved").length;
+  const redZones = zones.filter((z) => z.crowd_level === "red").length;
+
   return (
     <div>
-      <h1>Live Monitoring</h1>
+      <h1>Live monitoring</h1>
+      <p className="muted" style={{ marginTop: -8, marginBottom: 20 }}>
+        Data refreshes every 15 seconds.
+      </p>
 
-      <section className="card">
-        <h2>Zones &amp; Crowd Levels</h2>
+      <div className="stat-grid">
+        <div className="stat-tile">
+          <div className="stat-label">Zones tracked</div>
+          <div className="stat-value">{zones.length}</div>
+        </div>
+        <div className="stat-tile">
+          <div className="stat-label">Zones at red</div>
+          <div className="stat-value" style={{ color: redZones > 0 ? "var(--red-deep)" : "var(--ink)" }}>
+            {redZones} / {zones.length || 0}
+          </div>
+        </div>
+        <div className="stat-tile">
+          <div className="stat-label">Active SOS</div>
+          <div className="stat-value" style={{ color: activeSos > 0 ? "var(--red-deep)" : "var(--ink)" }}>
+            {activeSos}
+          </div>
+        </div>
+        <div className="stat-tile">
+          <div className="stat-label">Incidents logged</div>
+          <div className="stat-value">{incidents.length}</div>
+        </div>
+      </div>
+
+      <div className="map-placeholder" style={{ marginBottom: "1.25rem" }}>
+        <span className="map-placeholder-note">
+          <i className="ph ph-map-trifold" /> Map view — Mappls SDK integration point
+        </span>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {zones.map((z) => (
+            <span key={z.id} className="zone-pill">
+              <span className={`dot dot-${z.crowd_level}`} />
+              {z.name} · {z.crowd_level}
+            </span>
+          ))}
+          {zones.length === 0 && <span className="muted">No zones yet — add one to see it here.</span>}
+        </div>
+      </div>
+
+      {alerts.length > 0 && (
+        <div className="ai-card">
+          <div className="ai-card-label">
+            <i className="ph-fill ph-sparkle" /> AI predictive alert
+          </div>
+          {alerts.map((a) => (
+            <p key={a.zone_id}>
+              <strong>{a.zone_name}</strong>: {a.current_level} → likely <strong>{a.forecast_level}</strong> in ~{a.forecast_minutes} min. {a.note}
+            </p>
+          ))}
+          <div className="fine-print">Forecast model · prototype over recent report velocity. AI recommends, you decide.</div>
+        </div>
+      )}
+
+      <div className="card">
+        <h2>Zones &amp; crowd levels</h2>
         <table>
           <thead>
             <tr>
@@ -93,54 +156,21 @@ export function LiveMonitoringPage() {
             )}
           </tbody>
         </table>
-      </section>
+      </div>
 
-      <section className="card">
-        <h2>Predictive Alerts</h2>
-        {alerts.length === 0 ? (
-          <p className="muted">No zones are trending toward higher crowd levels right now.</p>
-        ) : (
-          <ul>
-            {alerts.map((a) => (
-              <li key={a.zone_id}>
-                <strong>{a.zone_name}</strong>: {a.current_level} → likely <strong>{a.forecast_level}</strong> in ~{a.forecast_minutes} min.{" "}
-                <span className="muted">{a.note}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="card">
-        <h2>Incident Log</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Details</th>
-              <th>Status</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {incidents.map((i) => (
-              <tr key={`${i.kind}-${i.id}`}>
-                <td>{i.kind === "sos" ? "SOS" : "Lost person"}</td>
-                <td>{i.text}</td>
-                <td>{i.status}</td>
-                <td>{new Date(i.time).toLocaleString()}</td>
-              </tr>
-            ))}
-            {incidents.length === 0 && (
-              <tr>
-                <td colSpan={4} className="muted">
-                  No incidents reported.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
+      <div className="card">
+        <h2>Incident feed</h2>
+        {incidents.map((i) => (
+          <div key={`${i.kind}-${i.id}`} className={`incident-row ${i.status !== "resolved" && i.status !== "matched" ? "severe" : ""}`}>
+            <i className={ICONS[i.kind]} style={{ color: i.kind === "sos" ? "var(--red)" : "var(--saffron-deep)" }} />
+            <div style={{ flex: 1 }}>
+              <div className="incident-title">{i.text}</div>
+              <div className="incident-sub">{new Date(i.time).toLocaleString()}</div>
+            </div>
+          </div>
+        ))}
+        {incidents.length === 0 && <p className="muted">No incidents reported.</p>}
+      </div>
     </div>
   );
 }
