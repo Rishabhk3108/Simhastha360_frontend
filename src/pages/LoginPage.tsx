@@ -17,8 +17,14 @@ export function LoginPage() {
     try {
       await login(phone, password);
       navigate("/admin");
-    } catch {
-      setError("Invalid phone or password.");
+    } catch (err: any) {
+      if (err instanceof Error && err.message === "not-admin") {
+        setError("This account isn't an admin account. Volunteers and field team members sign in through the mobile app instead.");
+      } else if (err.response?.status === 401) {
+        setError("Invalid phone or password.");
+      } else {
+        setError("Couldn't reach the server. Is the backend running?");
+      }
     } finally {
       setLoading(false);
     }

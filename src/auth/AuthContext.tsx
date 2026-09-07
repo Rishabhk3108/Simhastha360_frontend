@@ -18,6 +18,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(phone: string, password: string) {
     const { data } = await api.post("/auth/login", { phone, password });
+    if (data.role !== "admin") {
+      throw new Error("not-admin");
+    }
     localStorage.setItem("s360_token", data.access_token);
     localStorage.setItem("s360_role", data.role);
     localStorage.setItem("s360_name", data.name);
