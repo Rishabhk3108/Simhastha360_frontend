@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../../api/client";
 import { CrowdBadge } from "../../components/CrowdBadge";
 import type { CrowdLevel, LostPersonReport, PredictiveAlert, SOSAlert, Zone } from "../../api/types";
@@ -17,6 +17,9 @@ export function LiveMonitoringPage() {
   const [alerts, setAlerts] = useState<PredictiveAlert[]>([]);
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [zoneName, setZoneName] = useState("");
+  const [zoneLat, setZoneLat] = useState("");
+  const [zoneLng, setZoneLng] = useState("");
 
   async function loadAll() {
     const [zonesRes, alertsRes, sosRes, lostRes] = await Promise.all([
@@ -54,6 +57,15 @@ export function LiveMonitoringPage() {
 
   async function updateCrowdLevel(zoneId: number, level: CrowdLevel) {
     await api.patch(`/zones/${zoneId}/crowd-level`, { crowd_level: level });
+    loadAll();
+  }
+
+  async function createZone(e: FormEvent) {
+    e.preventDefault();
+    await api.post("/zones", { name: zoneName, center_lat: parseFloat(zoneLat), center_lng: parseFloat(zoneLng) });
+    setZoneName("");
+    setZoneLat("");
+    setZoneLng("");
     loadAll();
   }
 
@@ -120,6 +132,16 @@ export function LiveMonitoringPage() {
           <div className="fine-print">Forecast model · prototype over recent report velocity. AI recommends, you decide.</div>
         </div>
       )}
+
+      <div className="card">
+        <h2>Add zone</h2>
+        <form className="inline-form" onSubmit={createZone}>
+          <input placeholder="Zone name (e.g. Ram Ghat)" value={zoneName} onChange={(e) => setZoneName(e.target.value)} required style={{ flex: 1, minWidth: 180 }} />
+          <input placeholder="Latitude" value={zoneLat} onChange={(e) => setZoneLat(e.target.value)} required style={{ width: 140 }} />
+          <input placeholder="Longitude" value={zoneLng} onChange={(e) => setZoneLng(e.target.value)} required style={{ width: 140 }} />
+          <button type="submit">Add zone</button>
+        </form>
+      </div>
 
       <div className="card">
         <h2>Zones &amp; crowd levels</h2>
