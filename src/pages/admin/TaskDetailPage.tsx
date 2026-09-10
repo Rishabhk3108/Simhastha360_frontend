@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../api/client";
 import { TasksMap, type TaskPoint } from "../../components/TasksMap";
+import { STATUS_COLORS, STATUS_LABELS } from "../../utils/taskStatus";
 import type { Task, VolunteerOut, Zone } from "../../api/types";
 
 const UPLOADS_BASE = `${api.defaults.baseURL}/uploads`;
@@ -95,7 +96,8 @@ export function TaskDetailPage() {
 
       <h1>{task.description}</h1>
       <p className="muted" style={{ marginTop: -8, marginBottom: 20 }}>
-        {zone?.name ?? "No zone"} · {task.priority} priority · {task.points} pts · {task.status.replace("_", " ")}
+        {zone?.name ?? "No zone"} · {task.priority} priority · {task.points} pts ·{" "}
+        <span style={{ color: STATUS_COLORS[task.status], fontWeight: 600 }}>{STATUS_LABELS[task.status]}</span>
       </p>
 
       <div className="card" style={{ marginBottom: "1.25rem" }}>

@@ -1,7 +1,7 @@
 export type CrowdLevel = "green" | "yellow" | "red";
 export type FacilityType = "medical" | "toilet" | "water" | "help_desk" | "parking";
 export type VolunteerStatus = "pending" | "approved" | "rejected";
-export type TaskStatus = "unassigned" | "acknowledged" | "in_progress" | "review" | "complete";
+export type TaskStatus = "unassigned" | "assigned" | "acknowledged" | "review" | "complete";
 export type TaskPriority = "low" | "medium" | "high";
 export type VehicleType = "two_wheeler" | "three_wheeler" | "four_wheeler" | "six_wheeler";
 export type UserRole = "admin" | "volunteer_manager" | "volunteer" | "field_team";

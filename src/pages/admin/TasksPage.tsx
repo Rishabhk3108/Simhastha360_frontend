@@ -2,12 +2,22 @@ import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "re
 import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { TasksMap, type TaskPoint, type TasksMapHandle } from "../../components/TasksMap";
-import type { Task, TaskPriority, TaskSuggestion, VolunteerOut, Zone } from "../../api/types";
+import { STATUS_COLORS, STATUS_LABELS } from "../../utils/taskStatus";
+import type { Task, TaskPriority, TaskStatus, TaskSuggestion, VolunteerOut, Zone } from "../../api/types";
 
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high"];
 const PRIORITY_COLOR: Record<TaskPriority, string> = { low: "var(--green)", medium: "var(--yellow)", high: "var(--red)" };
 const UJJAIN_CENTER = { lat: 23.1765, lng: 75.7885 };
-const ACTIVE_STATUSES = new Set(["acknowledged", "in_progress"]);
+const ACTIVE_STATUSES = new Set(["assigned", "acknowledged"]);
+
+const STATUS_FILTERS: { label: string; value: TaskStatus | "all" }[] = [
+  { label: "All", value: "all" },
+  { label: "Unassigned", value: "unassigned" },
+  { label: "Assigned", value: "assigned" },
+  { label: "In progress", value: "acknowledged" },
+  { label: "In review", value: "review" },
+  { label: "Completed", value: "complete" },
+];
 
 export function TasksPage() {
   const navigate = useNavigate();
@@ -26,6 +36,7 @@ export function TasksPage() {
   const [suggestions, setSuggestions] = useState<TaskSuggestion[]>([]);
   const [loadingSuggestionsFor, setLoadingSuggestionsFor] = useState<number | null>(null);
   const [assigningId, setAssigningId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
   const mapRef = useRef<TasksMapHandle>(null);
 
   async function load() {
@@ -91,6 +102,8 @@ export function TasksPage() {
       await api.patch(`/tasks/${taskId}/assign`, { assignee_id: userId });
       setSuggestionsFor(null);
       await load();
+    } catch (err: any) {
+      window.alert(err.response?.data?.detail ?? "Couldn't assign this task. Please try again.");
     } finally {
       setAssigningId(null);
     }
@@ -207,7 +220,8 @@ export function TasksPage() {
               >
                 <div style={{ fontWeight: 500, color: "var(--ink)" }}>{t.description}</div>
                 <div className="muted small" style={{ marginTop: 4 }}>
-                  {t.points} pts · {t.status.replace("_", " ")} · assigned to {v ? v.name : `#${t.assignee_id}`}
+                  {t.points} pts · <span style={{ color: STATUS_COLORS[t.status], fontWeight: 600 }}>{STATUS_LABELS[t.status]}</span> ·
+                  assigned to {v ? v.name : `#${t.assignee_id}`}
                   {v?.current_lat != null && (
                     <> · last seen {v.location_updated_at ? new Date(v.location_updated_at).toLocaleTimeString() : ""}</>
                   )}
@@ -250,45 +264,60 @@ export function TasksPage() {
       {!pageLoading && (
         <div className="card">
           <h2>All tasks</h2>
-          {tasks.map((t) => (
-            <div
-              key={t.id}
-              onClick={() => navigate(`/admin/tasks/${t.id}`)}
-              style={{
-                cursor: "pointer",
-                borderLeft: `4px solid ${PRIORITY_COLOR[t.priority]}`,
-                borderRadius: 12,
-                background: "var(--surface-tint)",
-                padding: 16,
-                marginBottom: 10,
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 220 }}>
-                  <div style={{ fontWeight: 500, color: "var(--ink)" }}>{t.description}</div>
-                  <div className="muted small" style={{ marginTop: 4 }}>
-                    {zones.find((z) => z.id === t.zone_id)?.name ?? "No zone"} · {t.priority} priority · {t.points} pts ·{" "}
-                    {t.status.replace("_", " ")}
-                    {t.assignee_id ? ` · assigned to ${volunteerFor(t.assignee_id)?.name ?? `#${t.assignee_id}`}` : " · unassigned"}
+          <div className="pill-tabs" style={{ marginBottom: 16 }}>
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                className={`pill-tab ${statusFilter === f.value ? "active" : ""}`}
+                onClick={() => setStatusFilter(f.value)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {tasks
+            .filter((t) => statusFilter === "all" || t.status === statusFilter)
+            .map((t) => (
+              <div
+                key={t.id}
+                onClick={() => navigate(`/admin/tasks/${t.id}`)}
+                style={{
+                  cursor: "pointer",
+                  borderLeft: `4px solid ${PRIORITY_COLOR[t.priority]}`,
+                  borderRadius: 12,
+                  background: "var(--surface-tint)",
+                  padding: 16,
+                  marginBottom: 10,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <div style={{ fontWeight: 500, color: "var(--ink)" }}>{t.description}</div>
+                    <div className="muted small" style={{ marginTop: 4 }}>
+                      {zones.find((z) => z.id === t.zone_id)?.name ?? "No zone"} · {t.priority} priority · {t.points} pts ·{" "}
+                      <span style={{ color: STATUS_COLORS[t.status], fontWeight: 600 }}>{STATUS_LABELS[t.status]}</span>
+                      {t.assignee_id ? ` · assigned to ${volunteerFor(t.assignee_id)?.name ?? `#${t.assignee_id}`}` : ""}
+                    </div>
                   </div>
+                  {t.status === "unassigned" && (
+                    <button
+                      className="secondary"
+                      disabled={loadingSuggestionsFor === t.id}
+                      onClick={(e) => {
+                        stop(e);
+                        showSuggestions(t.id);
+                      }}
+                    >
+                      {loadingSuggestionsFor === t.id && <span className="button-spinner" />}
+                      Suggest volunteers
+                    </button>
+                  )}
                 </div>
-                {t.status === "unassigned" && (
-                  <button
-                    className="secondary"
-                    disabled={loadingSuggestionsFor === t.id}
-                    onClick={(e) => {
-                      stop(e);
-                      showSuggestions(t.id);
-                    }}
-                  >
-                    {loadingSuggestionsFor === t.id && <span className="button-spinner" />}
-                    Suggest volunteers
-                  </button>
-                )}
               </div>
-            </div>
-          ))}
-          {tasks.length === 0 && <p className="muted">No tasks yet.</p>}
+            ))}
+          {tasks.filter((t) => statusFilter === "all" || t.status === statusFilter).length === 0 && (
+            <p className="muted">No tasks match this filter.</p>
+          )}
         </div>
       )}
 
