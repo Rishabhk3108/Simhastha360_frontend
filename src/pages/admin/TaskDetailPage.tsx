@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../api/client";
 import { TasksMap, type TaskPoint } from "../../components/TasksMap";
 import { STATUS_COLORS, STATUS_LABELS } from "../../utils/taskStatus";
-import type { IssueReport, RouteResult, Task, VolunteerOut, Zone } from "../../api/types";
+import type { IssueReport, RouteResult, Task, TaskSuggestion, VolunteerOut, Zone } from "../../api/types";
 
 const UPLOADS_BASE = `${api.defaults.baseURL}/uploads`;
 const REFRESH_INTERVAL_MS = 10000;
@@ -19,6 +19,9 @@ export function TaskDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [suggestions, setSuggestions] = useState<TaskSuggestion[] | null>(null);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [assigningId, setAssigningId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!taskId) return;
@@ -79,6 +82,31 @@ export function TaskDetailPage() {
       await load();
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function showSuggestions() {
+    if (!task) return;
+    setLoadingSuggestions(true);
+    try {
+      const { data } = await api.get<TaskSuggestion[]>(`/tasks/${task.id}/suggestions`);
+      setSuggestions(data);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }
+
+  async function assign(userId: number) {
+    if (!task) return;
+    setAssigningId(userId);
+    try {
+      await api.patch(`/tasks/${task.id}/assign`, { assignee_id: userId });
+      setSuggestions(null);
+      await load();
+    } catch (err: any) {
+      window.alert(err.response?.data?.detail ?? "Couldn't assign this task. Please try again.");
+    } finally {
+      setAssigningId(null);
     }
   }
 
@@ -165,7 +193,67 @@ export function TaskDetailPage() {
             </div>
           </div>
         ) : (
-          <p className="muted">Not yet assigned.</p>
+          <>
+            <p className="muted">Not yet assigned.</p>
+            <button style={{ marginTop: 8 }} disabled={loadingSuggestions} onClick={showSuggestions}>
+              {loadingSuggestions && <span className="button-spinner" />}
+              Get recommendations
+            </button>
+          </>
+        )}
+
+        {suggestions !== null && !volunteer && (
+          <div className="ai-card" style={{ marginTop: 16 }}>
+            <div className="ai-card-label">
+              <i className="ph-fill ph-sparkle" /> Best-fit volunteers for this task
+            </div>
+            {suggestions.map((s) => (
+              <div
+                key={s.user_id}
+                style={{ display: "flex", alignItems: "center", gap: 11, background: "rgba(246,241,231,0.10)", borderRadius: 12, padding: 11 }}
+              >
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: "50%",
+                    background: "rgba(233,180,92,0.22)",
+                    color: "var(--brass)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {s.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 500 }}>{s.name}</div>
+                  <div style={{ fontSize: 11.5, color: "rgba(246,241,231,0.62)" }}>{s.reasons.join(" · ")}</div>
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--brass)" }}>{s.score.toFixed(1)}</div>
+                <button
+                  style={{ background: "var(--brass)", color: "var(--ink)" }}
+                  disabled={assigningId === s.user_id}
+                  onClick={() => assign(s.user_id)}
+                >
+                  {assigningId === s.user_id && <span className="button-spinner" />}
+                  Assign
+                </button>
+              </div>
+            ))}
+            {suggestions.length === 0 && <p style={{ color: "rgba(246,241,231,0.7)" }}>No approved, on-duty volunteers available right now.</p>}
+            <div className="fine-print">Ranked on skill, zone, proximity, and availability. The final call stays with you.</div>
+            <button
+              className="secondary"
+              style={{ alignSelf: "flex-start", background: "rgba(246,241,231,0.14)", color: "#fffdf8", border: "none" }}
+              onClick={() => setSuggestions(null)}
+            >
+              Close
+            </button>
+          </div>
         )}
       </div>
 
