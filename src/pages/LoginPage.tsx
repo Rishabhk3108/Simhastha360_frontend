@@ -19,7 +19,7 @@ export function LoginPage() {
       navigate("/admin");
     } catch (err: any) {
       if (err instanceof Error && err.message === "not-admin") {
-        setError("This account isn't an admin account. Volunteers and field team members sign in through the mobile app instead.");
+        setError("This account can't sign in to the Command Centre. Volunteers and field team members sign in through the mobile app instead.");
       } else if (err.response?.status === 401) {
         setError("Invalid phone or password.");
       } else {

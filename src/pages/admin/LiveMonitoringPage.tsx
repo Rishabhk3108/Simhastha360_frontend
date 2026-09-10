@@ -1,6 +1,9 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../../api/client";
+import { useAuth } from "../../auth/AuthContext";
 import { CrowdBadge } from "../../components/CrowdBadge";
+import { CctvPanel } from "../../components/CctvPanel";
+import { ZonesMap, type ZonesMapHandle } from "../../components/ZonesMap";
 import type { CrowdLevel, LostPersonReport, PredictiveAlert, SOSAlert, Zone } from "../../api/types";
 
 type IncidentRow =
@@ -12,14 +15,34 @@ const ICONS: Record<IncidentRow["kind"], string> = {
   lost_person: "ph-fill ph-user-focus",
 };
 
+const UJJAIN_CENTER = { lat: 23.1765, lng: 75.7885 };
+const DEFAULT_RADIUS_M = 300;
+
+interface ZoneDraft {
+  editingId: number | null;
+  name: string;
+  center: { lat: number; lng: number } | null;
+  radiusM: number;
+  crowdLevel: CrowdLevel;
+}
+
+const EMPTY_DRAFT: ZoneDraft = { editingId: null, name: "", center: null, radiusM: DEFAULT_RADIUS_M, crowdLevel: "green" };
+
 export function LiveMonitoringPage() {
+  const { role } = useAuth();
+  const canEdit = role === "admin";
   const [zones, setZones] = useState<Zone[]>([]);
   const [alerts, setAlerts] = useState<PredictiveAlert[]>([]);
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [zoneName, setZoneName] = useState("");
-  const [zoneLat, setZoneLat] = useState("");
-  const [zoneLng, setZoneLng] = useState("");
+  const [draft, setDraft] = useState<ZoneDraft | null>(null);
+  const mapRef = useRef<ZonesMapHandle>(null);
+  const mapCardRef = useRef<HTMLDivElement>(null);
+
+  function viewZone(zone: Zone) {
+    mapRef.current?.focusOn(zone.center_lat, zone.center_lng);
+    mapCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   async function loadAll() {
     const [zonesRes, alertsRes, sosRes, lostRes] = await Promise.all([
@@ -60,12 +83,46 @@ export function LiveMonitoringPage() {
     loadAll();
   }
 
-  async function createZone(e: FormEvent) {
+  async function deleteZone(zoneId: number) {
+    if (!window.confirm("Remove this zone? Pilgrims will stop seeing it on the map.")) return;
+    await api.delete(`/zones/${zoneId}`);
+    loadAll();
+  }
+
+  function startAddZone() {
+    setDraft({ ...EMPTY_DRAFT });
+  }
+
+  function startEditZone(zone: Zone) {
+    setDraft({
+      editingId: zone.id,
+      name: zone.name,
+      center: { lat: zone.center_lat, lng: zone.center_lng },
+      radiusM: zone.radius_m,
+      crowdLevel: zone.crowd_level,
+    });
+  }
+
+  function cancelDraft() {
+    setDraft(null);
+  }
+
+  async function saveDraft(e: FormEvent) {
     e.preventDefault();
-    await api.post("/zones", { name: zoneName, center_lat: parseFloat(zoneLat), center_lng: parseFloat(zoneLng) });
-    setZoneName("");
-    setZoneLat("");
-    setZoneLng("");
+    if (!draft || !draft.center) return;
+    const payload = {
+      name: draft.name,
+      center_lat: draft.center.lat,
+      center_lng: draft.center.lng,
+      radius_m: draft.radiusM,
+      crowd_level: draft.crowdLevel,
+    };
+    if (draft.editingId) {
+      await api.patch(`/zones/${draft.editingId}`, payload);
+    } else {
+      await api.post("/zones", payload);
+    }
+    setDraft(null);
     loadAll();
   }
 
@@ -104,20 +161,7 @@ export function LiveMonitoringPage() {
         </div>
       </div>
 
-      <div className="map-placeholder" style={{ marginBottom: "1.25rem" }}>
-        <span className="map-placeholder-note">
-          <i className="ph ph-map-trifold" /> Map view — Mappls SDK integration point
-        </span>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {zones.map((z) => (
-            <span key={z.id} className="zone-pill">
-              <span className={`dot dot-${z.crowd_level}`} />
-              {z.name} · {z.crowd_level}
-            </span>
-          ))}
-          {zones.length === 0 && <span className="muted">No zones yet — add one to see it here.</span>}
-        </div>
-      </div>
+      <CctvPanel />
 
       {alerts.length > 0 && (
         <div className="ai-card">
@@ -133,14 +177,62 @@ export function LiveMonitoringPage() {
         </div>
       )}
 
-      <div className="card">
-        <h2>Add zone</h2>
-        <form className="inline-form" onSubmit={createZone}>
-          <input placeholder="Zone name (e.g. Ram Ghat)" value={zoneName} onChange={(e) => setZoneName(e.target.value)} required style={{ flex: 1, minWidth: 180 }} />
-          <input placeholder="Latitude" value={zoneLat} onChange={(e) => setZoneLat(e.target.value)} required style={{ width: 140 }} />
-          <input placeholder="Longitude" value={zoneLng} onChange={(e) => setZoneLng(e.target.value)} required style={{ width: 140 }} />
-          <button type="submit">Add zone</button>
-        </form>
+      <div className="card" style={{ marginBottom: "1.25rem" }} ref={mapCardRef}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <h2 style={{ margin: 0 }}>Zone map</h2>
+          {canEdit && !draft && (
+            <button type="button" onClick={startAddZone}>
+              + Mark a zone
+            </button>
+          )}
+        </div>
+
+        <ZonesMap
+          ref={mapRef}
+          zones={zones}
+          initialCenter={UJJAIN_CENTER}
+          pickMode={draft !== null}
+          pendingCenter={draft?.center ?? null}
+          pendingRadiusM={draft?.radiusM ?? DEFAULT_RADIUS_M}
+          pendingCrowdLevel={draft?.crowdLevel ?? "green"}
+          onMapClick={(lat, lng) => setDraft((d) => (d ? { ...d, center: { lat, lng } } : d))}
+        />
+
+        {canEdit && draft && (
+          <form className="inline-form" onSubmit={saveDraft} style={{ marginTop: 16, flexWrap: "wrap" }}>
+            <input
+              placeholder="Zone name (e.g. Ram Ghat)"
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              required
+              style={{ flex: 1, minWidth: 180 }}
+            />
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+              Radius: {draft.radiusM} m
+              <input
+                type="range"
+                min={100}
+                max={2000}
+                step={50}
+                value={draft.radiusM}
+                onChange={(e) => setDraft({ ...draft, radiusM: parseInt(e.target.value, 10) })}
+                style={{ width: 160 }}
+              />
+            </label>
+            <select value={draft.crowdLevel} onChange={(e) => setDraft({ ...draft, crowdLevel: e.target.value as CrowdLevel })}>
+              <option value="green">green</option>
+              <option value="yellow">yellow</option>
+              <option value="red">red</option>
+            </select>
+            <button type="submit" disabled={!draft.center}>
+              {draft.editingId ? "Save changes" : "Save zone"}
+            </button>
+            <button type="button" className="secondary" onClick={cancelDraft}>
+              Cancel
+            </button>
+            {!draft.center && <span className="muted" style={{ width: "100%" }}>Click the map above to place the zone center.</span>}
+          </form>
+        )}
       </div>
 
       <div className="card">
@@ -149,29 +241,50 @@ export function LiveMonitoringPage() {
           <thead>
             <tr>
               <th>Zone</th>
+              <th>Radius</th>
               <th>Crowd level</th>
-              <th>Set level</th>
+              {canEdit && <th>Set level</th>}
+              <th>View</th>
+              {canEdit && <th></th>}
             </tr>
           </thead>
           <tbody>
             {zones.map((z) => (
               <tr key={z.id}>
                 <td>{z.name}</td>
+                <td>{z.radius_m} m</td>
                 <td>
                   <CrowdBadge level={z.crowd_level} />
                 </td>
+                {canEdit && (
+                  <td>
+                    <select value={z.crowd_level} onChange={(e) => updateCrowdLevel(z.id, e.target.value as CrowdLevel)}>
+                      <option value="green">green</option>
+                      <option value="yellow">yellow</option>
+                      <option value="red">red</option>
+                    </select>
+                  </td>
+                )}
                 <td>
-                  <select value={z.crowd_level} onChange={(e) => updateCrowdLevel(z.id, e.target.value as CrowdLevel)}>
-                    <option value="green">green</option>
-                    <option value="yellow">yellow</option>
-                    <option value="red">red</option>
-                  </select>
+                  <button type="button" className="secondary" onClick={() => viewZone(z)}>
+                    View
+                  </button>
                 </td>
+                {canEdit && (
+                  <td style={{ display: "flex", gap: 8 }}>
+                    <button type="button" className="secondary" onClick={() => startEditZone(z)}>
+                      Edit
+                    </button>
+                    <button type="button" className="secondary" onClick={() => deleteZone(z.id)}>
+                      Delete
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
             {zones.length === 0 && (
               <tr>
-                <td colSpan={3} className="muted">
+                <td colSpan={canEdit ? 6 : 4} className="muted">
                   No zones yet.
                 </td>
               </tr>

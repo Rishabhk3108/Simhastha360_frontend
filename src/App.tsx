@@ -5,9 +5,11 @@ import { PublicFamilyDashboardPage } from "./pages/PublicFamilyDashboardPage";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { LiveMonitoringPage } from "./pages/admin/LiveMonitoringPage";
 import { FacilitiesPage } from "./pages/admin/FacilitiesPage";
+import { ParkingPage } from "./pages/admin/ParkingPage";
 import { VolunteersPage } from "./pages/admin/VolunteersPage";
 import { TasksPage } from "./pages/admin/TasksPage";
 import { FieldTeamPage } from "./pages/admin/FieldTeamPage";
+import { VolunteerManagersPage } from "./pages/admin/VolunteerManagersPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function App() {
@@ -27,10 +29,40 @@ function App() {
         }
       >
         <Route index element={<LiveMonitoringPage />} />
-        <Route path="facilities" element={<FacilitiesPage />} />
+        <Route
+          path="facilities"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <FacilitiesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="parking"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <ParkingPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="volunteers" element={<VolunteersPage />} />
         <Route path="tasks" element={<TasksPage />} />
-        <Route path="field-team" element={<FieldTeamPage />} />
+        <Route
+          path="field-team"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <FieldTeamPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="volunteer-managers"
+          element={
+            <ProtectedRoute roles={["admin"]}>
+              <VolunteerManagersPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />

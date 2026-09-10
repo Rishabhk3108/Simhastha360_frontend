@@ -1,14 +1,33 @@
 export type CrowdLevel = "green" | "yellow" | "red";
 export type FacilityType = "medical" | "toilet" | "water" | "help_desk" | "parking";
 export type VolunteerStatus = "pending" | "approved" | "rejected";
-export type TaskStatus = "unassigned" | "acknowledged" | "in_progress" | "complete";
+export type TaskStatus = "unassigned" | "acknowledged" | "in_progress" | "review" | "complete";
 export type TaskPriority = "low" | "medium" | "high";
+export type VehicleType = "two_wheeler" | "three_wheeler" | "four_wheeler" | "six_wheeler";
+export type UserRole = "admin" | "volunteer_manager" | "volunteer" | "field_team";
+
+export interface ParkingZone {
+  id: number;
+  name: string;
+  center_lat: number;
+  center_lng: number;
+  capacity_two_wheeler: number;
+  capacity_three_wheeler: number;
+  capacity_four_wheeler: number;
+  capacity_six_wheeler: number;
+  occupied_two_wheeler: number;
+  occupied_three_wheeler: number;
+  occupied_four_wheeler: number;
+  occupied_six_wheeler: number;
+  updated_at: string;
+}
 
 export interface Zone {
   id: number;
   name: string;
   center_lat: number;
   center_lng: number;
+  radius_m: number;
   crowd_level: CrowdLevel;
   updated_at: string;
 }
@@ -24,15 +43,47 @@ export interface Facility {
   created_at: string;
 }
 
+export interface AvailabilitySlot {
+  date: string;
+  start_time: string;
+  end_time: string;
+}
+
 export interface VolunteerOut {
   id: number;
   user_id: number;
   name: string;
   phone: string;
+  age: number | null;
+  gender: string | null;
+  email: string | null;
+  city_state: string | null;
+  permanent_address: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  id_proof_type: string | null;
+  id_number: string | null;
+  id_proof_front_doc_id: string | null;
+  id_proof_back_doc_id: string | null;
+  photo_doc_id: string | null;
   skills: string;
+  languages: string;
+  availability_slots: AvailabilitySlot[];
+  prior_experience: string | null;
+  tshirt_size: string | null;
+  organization_affiliation: string | null;
+  medical_conditions: string | null;
+  no_criminal_record: boolean;
+  code_of_conduct_accepted: boolean;
+  media_consent: boolean;
   status: VolunteerStatus;
+  review_note: string | null;
+  rating: number | null;
   on_duty: boolean;
   preferred_zone_id: number | null;
+  current_lat: number | null;
+  current_lng: number | null;
+  location_updated_at: string | null;
   created_at: string;
 }
 
@@ -40,12 +91,18 @@ export interface Task {
   id: number;
   description: string;
   zone_id: number | null;
+  lat: number | null;
+  lng: number | null;
+  points: number;
   priority: TaskPriority;
   status: TaskStatus;
   assignee_id: number | null;
   ack_deadline_minutes: number;
+  completion_photo_doc_ids: string[];
+  review_note: string | null;
   created_at: string;
   acknowledged_at: string | null;
+  submitted_at: string | null;
   completed_at: string | null;
 }
 

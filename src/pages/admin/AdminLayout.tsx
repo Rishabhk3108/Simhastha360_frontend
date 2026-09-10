@@ -1,17 +1,26 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 
-const links = [
+const adminLinks = [
   { to: "/admin", label: "Live monitoring", icon: "ph-fill ph-monitor", end: true },
   { to: "/admin/facilities", label: "Facilities", icon: "ph ph-map-pin-area" },
+  { to: "/admin/parking", label: "Sinhastha Saarthi", icon: "ph ph-car" },
   { to: "/admin/volunteers", label: "Volunteers", icon: "ph ph-users" },
   { to: "/admin/tasks", label: "Tasks", icon: "ph ph-clipboard-text" },
   { to: "/admin/field-team", label: "Field teams", icon: "ph ph-shield-star" },
+  { to: "/admin/volunteer-managers", label: "Volunteer managers", icon: "ph ph-identification-badge" },
+];
+
+const volunteerManagerLinks = [
+  { to: "/admin", label: "Live monitoring", icon: "ph-fill ph-monitor", end: true },
+  { to: "/admin/volunteers", label: "Volunteers", icon: "ph ph-users" },
+  { to: "/admin/tasks", label: "Tasks", icon: "ph ph-clipboard-text" },
 ];
 
 export function AdminLayout() {
-  const { name, logout } = useAuth();
+  const { name, role, logout } = useAuth();
   const navigate = useNavigate();
+  const links = role === "volunteer_manager" ? volunteerManagerLinks : adminLinks;
 
   return (
     <div className="admin-shell">
