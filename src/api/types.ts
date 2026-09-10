@@ -80,6 +80,7 @@ export interface VolunteerOut {
   review_note: string | null;
   rating: number | null;
   on_duty: boolean;
+  accepts_emergencies: boolean;
   preferred_zone_id: number | null;
   current_lat: number | null;
   current_lng: number | null;
@@ -142,14 +143,20 @@ export interface FieldTeamMember {
   location_updated_at: string | null;
 }
 
+export type SOSStatus = "pending" | "assigned" | "responding" | "resolved";
+
 export interface SOSAlert {
   id: number;
   device_id: string;
   lat: number;
   lng: number;
-  status: string;
+  status: SOSStatus;
   assigned_responder_id: number | null;
+  assigned_at: string | null;
+  acknowledged_at: string | null;
+  escalated: boolean;
   created_at: string;
+  resolved_at: string | null;
 }
 
 export interface LostPersonReport {

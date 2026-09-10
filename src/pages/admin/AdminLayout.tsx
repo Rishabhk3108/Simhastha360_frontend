@@ -3,6 +3,7 @@ import { useAuth } from "../../auth/AuthContext";
 
 const adminLinks = [
   { to: "/admin", label: "Live monitoring", icon: "ph-fill ph-monitor", end: true },
+  { to: "/admin/emergency", label: "Emergency (SOS)", icon: "ph-fill ph-siren" },
   { to: "/admin/facilities", label: "Facilities", icon: "ph ph-map-pin-area" },
   { to: "/admin/parking", label: "Sinhastha Saarthi", icon: "ph ph-car" },
   { to: "/admin/volunteers", label: "Volunteers", icon: "ph ph-users" },
@@ -13,6 +14,7 @@ const adminLinks = [
 
 const volunteerManagerLinks = [
   { to: "/admin", label: "Live monitoring", icon: "ph-fill ph-monitor", end: true },
+  { to: "/admin/emergency", label: "Emergency (SOS)", icon: "ph-fill ph-siren" },
   { to: "/admin/volunteers", label: "Volunteers", icon: "ph ph-users" },
   { to: "/admin/tasks", label: "Tasks", icon: "ph ph-clipboard-text" },
 ];

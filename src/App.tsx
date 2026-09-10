@@ -11,6 +11,7 @@ import { TasksPage } from "./pages/admin/TasksPage";
 import { TaskDetailPage } from "./pages/admin/TaskDetailPage";
 import { FieldTeamPage } from "./pages/admin/FieldTeamPage";
 import { VolunteerManagersPage } from "./pages/admin/VolunteerManagersPage";
+import { EmergencyPage } from "./pages/admin/EmergencyPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { GlobalLoadingBar } from "./components/GlobalLoadingBar";
 
@@ -49,6 +50,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="emergency" element={<EmergencyPage />} />
           <Route path="volunteers" element={<VolunteersPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="tasks/:taskId" element={<TaskDetailPage />} />
