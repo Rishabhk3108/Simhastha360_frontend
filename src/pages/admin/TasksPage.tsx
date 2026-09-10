@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { TasksMap, type TaskPoint, type TasksMapHandle } from "../../components/TasksMap";
 import { STATUS_COLORS, STATUS_LABELS } from "../../utils/taskStatus";
-import type { Task, TaskPriority, TaskStatus, TaskSuggestion, VolunteerOut, Zone } from "../../api/types";
+import type { IssueReport, Task, TaskPriority, TaskStatus, TaskSuggestion, VolunteerOut, Zone } from "../../api/types";
+
+const UPLOADS_BASE = `${api.defaults.baseURL}/uploads`;
 
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high"];
 const PRIORITY_COLOR: Record<TaskPriority, string> = { low: "var(--green)", medium: "var(--yellow)", high: "var(--red)" };
@@ -37,17 +39,21 @@ export function TasksPage() {
   const [loadingSuggestionsFor, setLoadingSuggestionsFor] = useState<number | null>(null);
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
+  const [reports, setReports] = useState<IssueReport[]>([]);
+  const [reportActionId, setReportActionId] = useState<number | null>(null);
   const mapRef = useRef<TasksMapHandle>(null);
 
   async function load() {
-    const [taskRes, zoneRes, volRes] = await Promise.all([
+    const [taskRes, zoneRes, volRes, reportRes] = await Promise.all([
       api.get<Task[]>("/tasks"),
       api.get<Zone[]>("/zones"),
       api.get<VolunteerOut[]>("/volunteers", { params: { status: "approved" } }),
+      api.get<IssueReport[]>("/reports/issues", { params: { status: "new" } }),
     ]);
     setTasks(taskRes.data);
     setZones(zoneRes.data);
     setVolunteers(volRes.data);
+    setReports(reportRes.data);
     setPageLoading(false);
   }
 
@@ -113,6 +119,33 @@ export function TasksPage() {
     e.stopPropagation();
   }
 
+  async function createTaskFromReport(reportId: number, taskPriority: TaskPriority, taskPoints: number) {
+    setReportActionId(reportId);
+    try {
+      const { data } = await api.patch<Task>(`/reports/issues/${reportId}/create-task`, {
+        priority: taskPriority,
+        points: taskPoints,
+      });
+      await load();
+      navigate(`/admin/tasks/${data.id}`);
+    } catch (err: any) {
+      window.alert(err.response?.data?.detail ?? "Couldn't create a task from this report.");
+    } finally {
+      setReportActionId(null);
+    }
+  }
+
+  async function dismissReport(reportId: number) {
+    if (!window.confirm("Dismiss this report? No task will be created for it.")) return;
+    setReportActionId(reportId);
+    try {
+      await api.patch(`/reports/issues/${reportId}/dismiss`);
+      await load();
+    } finally {
+      setReportActionId(null);
+    }
+  }
+
   const reviewTasks = tasks.filter((t) => t.status === "review");
   const activeTasks = tasks.filter((t) => ACTIVE_STATUSES.has(t.status));
 
@@ -130,6 +163,24 @@ export function TasksPage() {
       <p className="muted" style={{ marginTop: -8, marginBottom: 20 }}>
         Create tasks and let AI suggest the best-fit volunteer — you make the final call. Click any task to open its detail page.
       </p>
+
+      {reports.length > 0 && (
+        <div className="card">
+          <h2>Incoming reports from pilgrims</h2>
+          <p className="muted small" style={{ marginTop: -6, marginBottom: 12 }}>
+            Reported directly from the app. Turn one into a task, or dismiss it if no action is needed.
+          </p>
+          {reports.map((r) => (
+            <IncomingReportCard
+              key={r.id}
+              report={r}
+              busy={reportActionId === r.id}
+              onCreateTask={(priority, points) => createTaskFromReport(r.id, priority, points)}
+              onDismiss={() => dismissReport(r.id)}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="card">
         <h2>Create task</h2>
@@ -367,6 +418,70 @@ export function TasksPage() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function IncomingReportCard({
+  report,
+  busy,
+  onCreateTask,
+  onDismiss,
+}: {
+  report: IssueReport;
+  busy: boolean;
+  onCreateTask: (priority: TaskPriority, points: number) => void;
+  onDismiss: () => void;
+}) {
+  const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [points, setPoints] = useState("10");
+
+  return (
+    <div style={{ borderRadius: 12, background: "var(--surface-tint)", padding: 16, marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+        {report.photo_doc_ids.map((docId) => (
+          <a key={docId} href={`${UPLOADS_BASE}/${docId}`} target="_blank" rel="noreferrer">
+            <img
+              src={`${UPLOADS_BASE}/${docId}`}
+              alt="Reported issue"
+              style={{ width: 90, height: 90, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)" }}
+            />
+          </a>
+        ))}
+      </div>
+      <p style={{ margin: "10px 0 4px", fontSize: 13.5 }}>{report.description || "No description provided."}</p>
+      <p className="muted small" style={{ margin: 0 }}>
+        {report.lat != null ? `${report.lat.toFixed(4)}, ${report.lng!.toFixed(4)}` : "No location"} ·{" "}
+        {new Date(report.created_at).toLocaleString()}
+      </p>
+      <div className="inline-form" style={{ marginTop: 10 }}>
+        <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} disabled={busy}>
+          {(["low", "medium", "high"] as TaskPriority[]).map((p) => (
+            <option key={p} value={p}>
+              {p} priority
+            </option>
+          ))}
+        </select>
+        <input
+          type="number"
+          min={0}
+          value={points}
+          onChange={(e) => setPoints(e.target.value)}
+          style={{ width: 90 }}
+          disabled={busy}
+        />
+        <button
+          style={{ background: "var(--teal)" }}
+          disabled={busy}
+          onClick={() => onCreateTask(priority, points ? parseInt(points, 10) : 0)}
+        >
+          {busy && <span className="button-spinner" />}
+          Create task
+        </button>
+        <button className="secondary" disabled={busy} onClick={onDismiss}>
+          Dismiss
+        </button>
+      </div>
     </div>
   );
 }

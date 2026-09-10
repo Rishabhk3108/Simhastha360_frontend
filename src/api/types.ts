@@ -113,6 +113,26 @@ export interface TaskSuggestion {
   reasons: string[];
 }
 
+export type IssueReportStatus = "new" | "task_created" | "dismissed";
+
+export interface IssueReport {
+  id: number;
+  device_id: string;
+  description: string | null;
+  photo_doc_ids: string[];
+  lat: number | null;
+  lng: number | null;
+  status: IssueReportStatus;
+  task_id: number | null;
+  created_at: string;
+}
+
+export interface RouteResult {
+  coordinates: { lat: number; lng: number }[];
+  distance_km: number;
+  duration_min: number;
+}
+
 export interface FieldTeamMember {
   id: number;
   name: string;

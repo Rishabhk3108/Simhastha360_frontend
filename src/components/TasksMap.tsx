@@ -10,6 +10,7 @@ const MAP_CONTAINER_ID = "s360-tasks-map";
 const POINT_RADIUS_M = 35;
 const TASK_COLOR = "#D9762B";
 const VOLUNTEER_COLOR = "#3E7CB1";
+const ROUTE_COLOR = "#1B2140";
 
 const mapplsClassObject = new mappls();
 
@@ -36,6 +37,7 @@ export interface TaskPoint {
 interface Props {
   taskPoints: TaskPoint[];
   volunteerPoints: TaskPoint[];
+  routeCoordinates?: { lat: number; lng: number }[];
   initialCenter: { lat: number; lng: number };
   pickMode: boolean;
   pendingCenter: { lat: number; lng: number } | null;
@@ -43,7 +45,7 @@ interface Props {
 }
 
 export const TasksMap = forwardRef<TasksMapHandle, Props>(function TasksMap(
-  { taskPoints, volunteerPoints, initialCenter, pickMode, pendingCenter, onMapClick },
+  { taskPoints, volunteerPoints, routeCoordinates, initialCenter, pickMode, pendingCenter, onMapClick },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,6 +53,7 @@ export const TasksMap = forwardRef<TasksMapHandle, Props>(function TasksMap(
   const taskCirclesRef = useRef<any[]>([]);
   const volunteerCirclesRef = useRef<any[]>([]);
   const pendingCircleRef = useRef<any>(null);
+  const routeLineRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
 
   useImperativeHandle(ref, () => ({
@@ -138,6 +141,23 @@ export const TasksMap = forwardRef<TasksMapHandle, Props>(function TasksMap(
       });
     }
   }, [pendingCenter, mapReady]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    if (routeLineRef.current) {
+      mapplsClassObject.removeLayer({ map: mapRef.current, layer: routeLineRef.current });
+      routeLineRef.current = null;
+    }
+    if (routeCoordinates && routeCoordinates.length > 1) {
+      routeLineRef.current = mapplsClassObject.Polyline({
+        map: mapRef.current,
+        path: routeCoordinates.map((c) => ({ lat: c.lat, lng: c.lng })),
+        strokeColor: ROUTE_COLOR,
+        strokeWeight: 4,
+        strokeOpacity: 0.85,
+      });
+    }
+  }, [routeCoordinates, mapReady]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;

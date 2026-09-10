@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../api/client";
 import { TasksMap, type TaskPoint } from "../../components/TasksMap";
 import { STATUS_COLORS, STATUS_LABELS } from "../../utils/taskStatus";
-import type { Task, VolunteerOut, Zone } from "../../api/types";
+import type { IssueReport, RouteResult, Task, VolunteerOut, Zone } from "../../api/types";
 
 const UPLOADS_BASE = `${api.defaults.baseURL}/uploads`;
 const REFRESH_INTERVAL_MS = 10000;
@@ -14,6 +14,8 @@ export function TaskDetailPage() {
   const [task, setTask] = useState<Task | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
   const [volunteers, setVolunteers] = useState<VolunteerOut[]>([]);
+  const [route, setRoute] = useState<RouteResult | null>(null);
+  const [sourceReport, setSourceReport] = useState<IssueReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -21,14 +23,27 @@ export function TaskDetailPage() {
   const load = useCallback(async () => {
     if (!taskId) return;
     try {
-      const [taskRes, zoneRes, volRes] = await Promise.all([
+      const [taskRes, zoneRes, volRes, reportRes] = await Promise.all([
         api.get<Task>(`/tasks/${taskId}`),
         api.get<Zone[]>("/zones"),
         api.get<VolunteerOut[]>("/volunteers", { params: { status: "approved" } }),
+        api.get<IssueReport[]>("/reports/issues", { params: { task_id: taskId } }),
       ]);
       setTask(taskRes.data);
       setZones(zoneRes.data);
       setVolunteers(volRes.data);
+      setSourceReport(reportRes.data[0] ?? null);
+
+      if (taskRes.data.assignee_id && taskRes.data.lat != null && taskRes.data.lng != null) {
+        try {
+          const routeRes = await api.get<RouteResult>(`/tasks/${taskId}/route`);
+          setRoute(routeRes.data);
+        } catch {
+          setRoute(null);
+        }
+      } else {
+        setRoute(null);
+      }
     } catch (err: any) {
       if (err.response?.status === 404) setNotFound(true);
     } finally {
@@ -109,6 +124,7 @@ export function TaskDetailPage() {
             <TasksMap
               taskPoints={taskPoints}
               volunteerPoints={volunteerPoints}
+              routeCoordinates={route?.coordinates}
               initialCenter={{ lat: task.lat!, lng: task.lng! }}
               pickMode={false}
               pendingCenter={null}
@@ -118,6 +134,13 @@ export function TaskDetailPage() {
               <span style={{ color: "#D9762B", fontWeight: 700 }}>● T</span> task location &nbsp;·&nbsp;
               <span style={{ color: "#3E7CB1", fontWeight: 700 }}>● V</span> volunteer's live location
               {volunteerPoints.length === 0 && volunteer && " (not reported yet)"}
+              {route && (
+                <>
+                  {" "}
+                  · <span style={{ color: "var(--ink)", fontWeight: 600 }}>{route.distance_km.toFixed(1)} km</span> ·{" "}
+                  {Math.round(route.duration_min)} min to reach the task
+                </>
+              )}
             </div>
           </>
         )}
@@ -174,6 +197,27 @@ export function TaskDetailPage() {
           )}
         </div>
       </div>
+
+      {sourceReport && (
+        <div className="card" style={{ marginBottom: "1.25rem" }}>
+          <h2>Reported by pilgrim</h2>
+          <p className="muted small" style={{ marginTop: -6 }}>
+            Submitted {new Date(sourceReport.created_at).toLocaleString()}
+          </p>
+          {sourceReport.description && <p style={{ fontSize: 13.5 }}>{sourceReport.description}</p>}
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            {sourceReport.photo_doc_ids.map((docId) => (
+              <a key={docId} href={`${UPLOADS_BASE}/${docId}`} target="_blank" rel="noreferrer">
+                <img
+                  src={`${UPLOADS_BASE}/${docId}`}
+                  alt="Reported issue"
+                  style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)" }}
+                />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {task.status === "review" && (
         <div className="card">
