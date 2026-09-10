@@ -9,19 +9,26 @@ const TABS: { label: string; value: VolunteerStatus }[] = [
 ];
 
 const UPLOADS_BASE = `${api.defaults.baseURL}/uploads`;
+const POLL_INTERVAL_MS = 20000;
 
 export function VolunteersPage() {
   const [volunteers, setVolunteers] = useState<VolunteerOut[]>([]);
   const [statusFilter, setStatusFilter] = useState<VolunteerStatus>("pending");
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   async function load() {
     const { data } = await api.get<VolunteerOut[]>("/volunteers", { params: { status: statusFilter } });
     setVolunteers(data);
+    setPageLoading(false);
   }
 
   useEffect(() => {
+    setPageLoading(true);
     load();
+    const interval = setInterval(load, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
@@ -42,8 +49,13 @@ export function VolunteersPage() {
       if (entered === null) return; // cancelled
       note = entered || undefined;
     }
-    await api.patch(`/volunteers/${id}/review`, { action, note, rating });
-    load();
+    setBusyId(id);
+    try {
+      await api.patch(`/volunteers/${id}/review`, { action, note, rating });
+      await load();
+    } finally {
+      setBusyId(null);
+    }
   }
 
   return (
@@ -61,6 +73,9 @@ export function VolunteersPage() {
         ))}
       </div>
 
+      {pageLoading && <p className="muted">Loading volunteers…</p>}
+
+      {!pageLoading && (
       <div className="card">
         <table>
           <thead>
@@ -116,13 +131,16 @@ export function VolunteersPage() {
                     <div className="row-actions" style={{ justifyContent: "flex-end" }}>
                       {v.status === "pending" && (
                         <>
-                          <button style={{ background: "var(--teal)" }} onClick={() => review(v.id, "approve")}>
+                          <button style={{ background: "var(--teal)" }} disabled={busyId === v.id} onClick={() => review(v.id, "approve")}>
+                            {busyId === v.id && <span className="button-spinner" />}
                             Approve
                           </button>
-                          <button className="secondary" onClick={() => review(v.id, "reject")}>
+                          <button className="secondary" disabled={busyId === v.id} onClick={() => review(v.id, "reject")}>
+                            {busyId === v.id && <span className="button-spinner" />}
                             Reject
                           </button>
-                          <button className="secondary" onClick={() => review(v.id, "request_info")}>
+                          <button className="secondary" disabled={busyId === v.id} onClick={() => review(v.id, "request_info")}>
+                            {busyId === v.id && <span className="button-spinner" />}
                             Request info
                           </button>
                         </>
@@ -149,6 +167,7 @@ export function VolunteersPage() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

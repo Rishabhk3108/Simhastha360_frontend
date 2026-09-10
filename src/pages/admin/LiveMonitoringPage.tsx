@@ -36,6 +36,7 @@ export function LiveMonitoringPage() {
   const [incidents, setIncidents] = useState<IncidentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<ZoneDraft | null>(null);
+  const [savingZone, setSavingZone] = useState(false);
   const mapRef = useRef<ZonesMapHandle>(null);
   const mapCardRef = useRef<HTMLDivElement>(null);
 
@@ -117,13 +118,18 @@ export function LiveMonitoringPage() {
       radius_m: draft.radiusM,
       crowd_level: draft.crowdLevel,
     };
-    if (draft.editingId) {
-      await api.patch(`/zones/${draft.editingId}`, payload);
-    } else {
-      await api.post("/zones", payload);
+    setSavingZone(true);
+    try {
+      if (draft.editingId) {
+        await api.patch(`/zones/${draft.editingId}`, payload);
+      } else {
+        await api.post("/zones", payload);
+      }
+      setDraft(null);
+      await loadAll();
+    } finally {
+      setSavingZone(false);
     }
-    setDraft(null);
-    loadAll();
   }
 
   if (loading) return <p>Loading live monitoring...</p>;
@@ -224,7 +230,8 @@ export function LiveMonitoringPage() {
               <option value="yellow">yellow</option>
               <option value="red">red</option>
             </select>
-            <button type="submit" disabled={!draft.center}>
+            <button type="submit" disabled={!draft.center || savingZone}>
+              {savingZone && <span className="button-spinner" />}
               {draft.editingId ? "Save changes" : "Save zone"}
             </button>
             <button type="button" className="secondary" onClick={cancelDraft}>

@@ -13,10 +13,13 @@ export function VolunteerManagersPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
 
   async function load() {
     const { data } = await api.get<VolunteerManager[]>("/volunteer-managers");
     setManagers(data);
+    setPageLoading(false);
   }
 
   useEffect(() => {
@@ -26,14 +29,17 @@ export function VolunteerManagersPage() {
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setCreating(true);
     try {
       await api.post("/volunteer-managers", { name, phone, password });
       setName("");
       setPhone("");
       setPassword("");
-      load();
+      await load();
     } catch (err: any) {
       setError(err.response?.data?.detail ?? "Couldn't create the account.");
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -57,11 +63,17 @@ export function VolunteerManagersPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-          <button type="submit">Add</button>
+          <button type="submit" disabled={creating}>
+            {creating && <span className="button-spinner" />}
+            Add
+          </button>
         </form>
         {error && <p className="error-text">{error}</p>}
       </section>
 
+      {pageLoading && <p className="muted">Loading accounts…</p>}
+
+      {!pageLoading && (
       <section className="card">
         <h2>Accounts</h2>
         <table>
@@ -88,6 +100,7 @@ export function VolunteerManagersPage() {
           </tbody>
         </table>
       </section>
+      )}
     </div>
   );
 }

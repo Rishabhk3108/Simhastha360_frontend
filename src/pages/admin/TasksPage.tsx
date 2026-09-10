@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import { TasksMap, type TaskPoint, type TasksMapHandle } from "../../components/TasksMap";
 import type { Task, TaskPriority, TaskSuggestion, VolunteerOut, Zone } from "../../api/types";
@@ -6,21 +7,25 @@ import type { Task, TaskPriority, TaskSuggestion, VolunteerOut, Zone } from "../
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high"];
 const PRIORITY_COLOR: Record<TaskPriority, string> = { low: "var(--green)", medium: "var(--yellow)", high: "var(--red)" };
 const UJJAIN_CENTER = { lat: 23.1765, lng: 75.7885 };
-const UPLOADS_BASE = `${api.defaults.baseURL}/uploads`;
 const ACTIVE_STATUSES = new Set(["acknowledged", "in_progress"]);
 
 export function TasksPage() {
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [volunteers, setVolunteers] = useState<VolunteerOut[]>([]);
+  const [pageLoading, setPageLoading] = useState(true);
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [zoneId, setZoneId] = useState("");
   const [points, setPoints] = useState("10");
   const [pendingCenter, setPendingCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [pickingLocation, setPickingLocation] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [suggestionsFor, setSuggestionsFor] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<TaskSuggestion[]>([]);
+  const [loadingSuggestionsFor, setLoadingSuggestionsFor] = useState<number | null>(null);
+  const [assigningId, setAssigningId] = useState<number | null>(null);
   const mapRef = useRef<TasksMapHandle>(null);
 
   async function load() {
@@ -32,6 +37,7 @@ export function TasksPage() {
     setTasks(taskRes.data);
     setZones(zoneRes.data);
     setVolunteers(volRes.data);
+    setPageLoading(false);
   }
 
   useEffect(() => {
@@ -47,43 +53,51 @@ export function TasksPage() {
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
-    await api.post("/tasks", {
-      description,
-      priority,
-      zone_id: zoneId ? parseInt(zoneId, 10) : null,
-      points: points ? parseInt(points, 10) : 0,
-      lat: pendingCenter?.lat ?? null,
-      lng: pendingCenter?.lng ?? null,
-    });
-    setDescription("");
-    setZoneId("");
-    setPoints("10");
-    setPendingCenter(null);
-    setPickingLocation(false);
-    load();
+    setCreating(true);
+    try {
+      await api.post("/tasks", {
+        description,
+        priority,
+        zone_id: zoneId ? parseInt(zoneId, 10) : null,
+        points: points ? parseInt(points, 10) : 0,
+        lat: pendingCenter?.lat ?? null,
+        lng: pendingCenter?.lng ?? null,
+      });
+      setDescription("");
+      setZoneId("");
+      setPoints("10");
+      setPendingCenter(null);
+      setPickingLocation(false);
+      await load();
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function showSuggestions(taskId: number) {
-    const { data } = await api.get<TaskSuggestion[]>(`/tasks/${taskId}/suggestions`);
-    setSuggestions(data);
-    setSuggestionsFor(taskId);
+    setLoadingSuggestionsFor(taskId);
+    try {
+      const { data } = await api.get<TaskSuggestion[]>(`/tasks/${taskId}/suggestions`);
+      setSuggestions(data);
+      setSuggestionsFor(taskId);
+    } finally {
+      setLoadingSuggestionsFor(null);
+    }
   }
 
   async function assign(taskId: number, userId: number) {
-    await api.patch(`/tasks/${taskId}/assign`, { assignee_id: userId });
-    setSuggestionsFor(null);
-    load();
+    setAssigningId(userId);
+    try {
+      await api.patch(`/tasks/${taskId}/assign`, { assignee_id: userId });
+      setSuggestionsFor(null);
+      await load();
+    } finally {
+      setAssigningId(null);
+    }
   }
 
-  async function reviewTask(taskId: number, action: "approve" | "reject") {
-    let note: string | undefined;
-    if (action === "reject") {
-      const entered = window.prompt("What needs to be fixed before this task can be approved?");
-      if (entered === null) return;
-      note = entered || undefined;
-    }
-    await api.patch(`/tasks/${taskId}/review`, { action, note });
-    load();
+  function stop(e: MouseEvent) {
+    e.stopPropagation();
   }
 
   const reviewTasks = tasks.filter((t) => t.status === "review");
@@ -101,7 +115,7 @@ export function TasksPage() {
     <div>
       <h1>Tasks</h1>
       <p className="muted" style={{ marginTop: -8, marginBottom: 20 }}>
-        Create tasks and let AI suggest the best-fit volunteer — you make the final call.
+        Create tasks and let AI suggest the best-fit volunteer — you make the final call. Click any task to open its detail page.
       </p>
 
       <div className="card">
@@ -137,14 +151,13 @@ export function TasksPage() {
             onChange={(e) => setPoints(e.target.value)}
             style={{ width: 90 }}
           />
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => setPickingLocation((p) => !p)}
-          >
+          <button type="button" className="secondary" onClick={() => setPickingLocation((p) => !p)}>
             {pickingLocation ? "Stop picking" : pendingCenter ? "Change location" : "Pick location on map"}
           </button>
-          <button type="submit">Create</button>
+          <button type="submit" disabled={creating}>
+            {creating && <span className="button-spinner" />}
+            Create
+          </button>
           {pendingCenter && (
             <span className="muted small" style={{ width: "100%" }}>
               Location: {pendingCenter.lat.toFixed(4)}, {pendingCenter.lng.toFixed(4)}
@@ -172,7 +185,9 @@ export function TasksPage() {
         </div>
       </div>
 
-      {activeTasks.length > 0 && (
+      {pageLoading && <p className="muted">Loading tasks…</p>}
+
+      {!pageLoading && activeTasks.length > 0 && (
         <div className="card">
           <h2>Active tasks</h2>
           {activeTasks.map((t) => {
@@ -180,7 +195,9 @@ export function TasksPage() {
             return (
               <div
                 key={t.id}
+                onClick={() => navigate(`/admin/tasks/${t.id}`)}
                 style={{
+                  cursor: "pointer",
                   borderLeft: `4px solid ${PRIORITY_COLOR[t.priority]}`,
                   borderRadius: 12,
                   background: "var(--surface-tint)",
@@ -201,7 +218,7 @@ export function TasksPage() {
         </div>
       )}
 
-      {reviewTasks.length > 0 && (
+      {!pageLoading && reviewTasks.length > 0 && (
         <div className="card">
           <h2>Tasks awaiting review</h2>
           {reviewTasks.map((t) => {
@@ -209,40 +226,20 @@ export function TasksPage() {
             return (
               <div
                 key={t.id}
+                onClick={() => navigate(`/admin/tasks/${t.id}`)}
                 style={{
+                  cursor: "pointer",
                   borderRadius: 12,
                   background: "var(--surface-tint)",
                   padding: 16,
                   marginBottom: 10,
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ flex: 1, minWidth: 220 }}>
-                    <div style={{ fontWeight: 500, color: "var(--ink)" }}>{t.description}</div>
-                    <div className="muted small" style={{ marginTop: 4 }}>
-                      {t.points} pts · submitted by {v ? v.name : `#${t.assignee_id}`}
-                      {t.submitted_at && ` · ${new Date(t.submitted_at).toLocaleString()}`}
-                    </div>
-                  </div>
-                  <div className="row-actions">
-                    <button style={{ background: "var(--teal)" }} onClick={() => reviewTask(t.id, "approve")}>
-                      Approve
-                    </button>
-                    <button className="secondary" onClick={() => reviewTask(t.id, "reject")}>
-                      Reject
-                    </button>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 14, marginTop: 12, flexWrap: "wrap" }}>
-                  {t.completion_photo_doc_ids.map((docId) => (
-                    <a key={docId} href={`${UPLOADS_BASE}/${docId}`} target="_blank" rel="noreferrer">
-                      <img
-                        src={`${UPLOADS_BASE}/${docId}`}
-                        alt="Completion photo"
-                        style={{ width: 120, height: 120, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)" }}
-                      />
-                    </a>
-                  ))}
+                <div style={{ fontWeight: 500, color: "var(--ink)" }}>{t.description}</div>
+                <div className="muted small" style={{ marginTop: 4 }}>
+                  {t.points} pts · submitted by {v ? v.name : `#${t.assignee_id}`}
+                  {t.submitted_at && ` · ${new Date(t.submitted_at).toLocaleString()}`} · {t.completion_photo_doc_ids.length} photos ·
+                  click to review
                 </div>
               </div>
             );
@@ -250,38 +247,50 @@ export function TasksPage() {
         </div>
       )}
 
-      <div className="card">
-        <h2>All tasks</h2>
-        {tasks.map((t) => (
-          <div
-            key={t.id}
-            style={{
-              borderLeft: `4px solid ${PRIORITY_COLOR[t.priority]}`,
-              borderRadius: 12,
-              background: "var(--surface-tint)",
-              padding: 16,
-              marginBottom: 10,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 220 }}>
-                <div style={{ fontWeight: 500, color: "var(--ink)" }}>{t.description}</div>
-                <div className="muted small" style={{ marginTop: 4 }}>
-                  {zones.find((z) => z.id === t.zone_id)?.name ?? "No zone"} · {t.priority} priority · {t.points} pts ·{" "}
-                  {t.status.replace("_", " ")}
-                  {t.assignee_id ? ` · assigned to ${volunteerFor(t.assignee_id)?.name ?? `#${t.assignee_id}`}` : " · unassigned"}
+      {!pageLoading && (
+        <div className="card">
+          <h2>All tasks</h2>
+          {tasks.map((t) => (
+            <div
+              key={t.id}
+              onClick={() => navigate(`/admin/tasks/${t.id}`)}
+              style={{
+                cursor: "pointer",
+                borderLeft: `4px solid ${PRIORITY_COLOR[t.priority]}`,
+                borderRadius: 12,
+                background: "var(--surface-tint)",
+                padding: 16,
+                marginBottom: 10,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <div style={{ fontWeight: 500, color: "var(--ink)" }}>{t.description}</div>
+                  <div className="muted small" style={{ marginTop: 4 }}>
+                    {zones.find((z) => z.id === t.zone_id)?.name ?? "No zone"} · {t.priority} priority · {t.points} pts ·{" "}
+                    {t.status.replace("_", " ")}
+                    {t.assignee_id ? ` · assigned to ${volunteerFor(t.assignee_id)?.name ?? `#${t.assignee_id}`}` : " · unassigned"}
+                  </div>
                 </div>
+                {t.status === "unassigned" && (
+                  <button
+                    className="secondary"
+                    disabled={loadingSuggestionsFor === t.id}
+                    onClick={(e) => {
+                      stop(e);
+                      showSuggestions(t.id);
+                    }}
+                  >
+                    {loadingSuggestionsFor === t.id && <span className="button-spinner" />}
+                    Suggest volunteers
+                  </button>
+                )}
               </div>
-              {t.status === "unassigned" && (
-                <button className="secondary" onClick={() => showSuggestions(t.id)}>
-                  Suggest volunteers
-                </button>
-              )}
             </div>
-          </div>
-        ))}
-        {tasks.length === 0 && <p className="muted">No tasks yet.</p>}
-      </div>
+          ))}
+          {tasks.length === 0 && <p className="muted">No tasks yet.</p>}
+        </div>
+      )}
 
       {suggestionsFor !== null && (
         <div className="ai-card">
@@ -312,7 +321,12 @@ export function TasksPage() {
                 <div style={{ fontSize: 11.5, color: "rgba(246,241,231,0.62)" }}>{s.reasons.join(" · ")}</div>
               </div>
               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--brass)" }}>{s.score.toFixed(1)}</div>
-              <button style={{ background: "var(--brass)", color: "var(--ink)" }} onClick={() => assign(suggestionsFor, s.user_id)}>
+              <button
+                style={{ background: "var(--brass)", color: "var(--ink)" }}
+                disabled={assigningId === s.user_id}
+                onClick={() => assign(suggestionsFor, s.user_id)}
+              >
+                {assigningId === s.user_id && <span className="button-spinner" />}
                 Assign
               </button>
             </div>
